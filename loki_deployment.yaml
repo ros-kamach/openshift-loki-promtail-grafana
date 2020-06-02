@@ -177,7 +177,7 @@ parameters:
 - description: Storage size.
   displayName: Storage size
   name: STORAGE_SIZE
-  value: "20Gi"
+  value: "10Gi"
 
 - description: Azure Storage Account Name.
   displayName: Azure Storage Account Name
