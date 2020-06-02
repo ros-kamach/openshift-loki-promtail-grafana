@@ -29,7 +29,7 @@ objects:
 
       server:
         http_listen_port: 3100
-      
+
       ingester:
         lifecycler:
           address: 127.0.0.1
@@ -40,37 +40,56 @@ objects:
           final_sleep: 0s
         chunk_idle_period: 5m
         chunk_retain_period: 30s
-        max_transfer_retries: 0
-      
+
       schema_config:
         configs:
-          - from: 2018-04-15
-            store: boltdb
-            object_store: filesystem
-            schema: v11
-            index:
-              prefix: index_
-              period: 168h
-      
+        - from: 2018-04-15
+          store: boltdb
+          object_store: aws
+          schema: v11
+          index:
+            prefix: index_
+            period: 360h
+          chunks:
+            prefix: chunk_
+            period: 360h
+              
       storage_config:
         boltdb:
           directory: /loki/index
-      
-        filesystem:
-          directory: /loki/chunks
-      
+        aws:
+          s3: s3://${AZURE_SA_NAME}:${AZURE_SA_KEY}@minio.default.svc:9000/loki-chunks
+          s3forcepathstyle: true
       limits_config:
+        # Enforce every sample has a metric name.
         enforce_metric_name: false
+        # Whether or not old samples will be rejected.
         reject_old_samples: true
+        # Maximum accepted sample age before rejecting.
         reject_old_samples_max_age: 168h
-      
+
+      # Configures how chunks will be cached and how long to wait before saving them
+      # to the backing store.
       chunk_store_config:
-        max_look_back_period: 0s
-      
+        # Limit how long back data can be queries.
+        max_look_back_period: 0
+
+      # Configures how the table manager operates and how to provision tables when
+      # DynamoDB is used as the backing store.
       table_manager:
+        chunk_tables_provisioning:
+          inactive_read_throughput: 0
+          inactive_write_throughput: 0
+          provisioned_read_throughput: 0
+          provisioned_write_throughput: 0
+        index_tables_provisioning:
+          inactive_read_throughput: 0
+          inactive_write_throughput: 0
+          provisioned_read_throughput: 0
+          provisioned_write_throughput: 0
         retention_deletes_enabled: false
-        retention_period: 0s
- 
+        retention_period: 0
+
 - apiVersion: "v1"
   kind: "PersistentVolumeClaim"
   metadata:
@@ -81,10 +100,10 @@ objects:
       - ${STORAGE_ACCSESS_MODE}
     resources:
       requests:
-        storage: ${STORAGE_SIZE}
+        storage: ${STORAGE_SIZE}        
 
-- apiVersion: apps/v1
-  kind: StatefulSet
+- apiVersion: apps/v1beta2
+  kind: Deployment
   metadata:
     name: loki
     namespace: ${GRAFANA_PROJECT_NAME}
@@ -92,42 +111,35 @@ objects:
       app: loki
       group: grafana
   spec:
-    podManagementPolicy: OrderedReady
     replicas: 1
     selector:
       matchLabels:
         app: loki
         group: grafana
-    serviceName: loki-headless
-    updateStrategy:
-      type: RollingUpdate
     template:
       metadata:
         labels:
           app: loki
           group: grafana
       spec:
+        serviceAccountName: loki
         containers:
           - name: loki
-            # image: grafana/loki:latest
-            image: grafana/loki:1.5.0
+            # image: grafana/loki:1.5.0
+            # image: grafana/loki:1.4.1
+            image: grafana/loki:master
             imagePullPolicy: IfNotPresent
             args: ['-config.file=/etc/loki/loki-config.yaml']
+            resources:
+              limits:
+                cpu: '1'
+                memory: 2Gi
+              requests:
+                cpu: '1'
+                memory: 1Gi
             ports:
-              - name: http-metrics
-                containerPort: 3100
+              - containerPort: 3100
                 protocol: TCP
-            livenessProbe:
-              httpGet:
-                path: /ready
-                port: http-metrics
-              initialDelaySeconds: 45
-            readinessProbe:
-              httpGet:
-                path: /ready
-                port: http-metrics
-              initialDelaySeconds: 45
-
             volumeMounts:
             - name: loki-config
               mountPath: /etc/loki/
@@ -137,20 +149,17 @@ objects:
           - name: loki-config
             configMap:
               name: loki-config
-          # - name: storage
-          #   emptyDir: {}
           - name: loki-data
             persistentVolumeClaim:
               claimName: loki-storage
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
         serviceAccountName: loki
-        securityContext:
-          # fsGroup: 10001
-          # runAsGroup: 10001
-          runAsNonRoot: true
-          # runAsUser: 10001
-        initContainers:
-          []
-        terminationGracePeriodSeconds: 4800
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        
+
 
 - apiVersion: v1
   kind: Service
@@ -161,15 +170,17 @@ objects:
       app: loki
       group: grafana
   spec:
-    type: NodePort
+    type: ClusterIP
     ports:
-      - port: 3100
-        targetPort: 3100
+      - name: 3100-tcp
+        port: 3100
         protocol: TCP
+        targetPort: 3100
     selector:
       app: loki
       group: grafana
-
+    sessionAffinity: None
+      
 
 #Variables
 parameters:
@@ -187,3 +198,13 @@ parameters:
   displayName: Storage size
   name: STORAGE_SIZE
   value: "20Gi"
+
+- description: Azure Storage Account Name.
+  displayName: Azure Storage Account Name
+  name: AZURE_SA_NAME
+  value: "lokiblob"
+
+- description: Azure Storage Account Key.
+  displayName: Azure Storage Account Key
+  name: AZURE_SA_KEY
+  value: "YdNHuwqKq63IMMpYaYhPrwT3QQq0PL+xYb9iVIzpU0vmUNr35xrQx6JNtFPF6w3IudiETA7QOvIs61HVStwSWg=="

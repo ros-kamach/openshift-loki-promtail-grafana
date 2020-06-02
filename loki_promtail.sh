@@ -11,13 +11,13 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 grafana_yaml="grafana_oauth.yaml"
-loki_yaml="loki.yaml"
+loki_yaml="loki_deployment.yaml"
 promtail_yaml="promtail_demonset.yaml"
 
 promtail_service_account="promtail-sa"
 loki_service_account="promtail-sa"
 
-node_selector="openshift-demo100-node-0"
+node_selector="openshift-demo16-node-0"
 
 PROMTAIL_NAMESPACE="$1"
 LOKI_NAMESPACE="$2"
