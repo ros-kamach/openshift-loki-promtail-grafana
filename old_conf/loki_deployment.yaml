@@ -182,9 +182,9 @@ parameters:
 - description: Azure Storage Account Name.
   displayName: Azure Storage Account Name
   name: AZURE_SA_NAME
-  value: "lokiblob"
+  value: "XXXXXXXXXXXXXX"
 
 - description: Azure Storage Account Key.
   displayName: Azure Storage Account Key
   name: AZURE_SA_KEY
-  value: "YdNHuwqKq63IMMpYaYhPrwT3QQq0PL+xYb9iVIzpU0vmUNr35xrQx6JNtFPF6w3IudiETA7QOvIs61HVStwSWg=="
+  value: "XXXXXXXXXXXXXX"
