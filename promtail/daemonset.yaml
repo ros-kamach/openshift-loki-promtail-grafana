@@ -1,0 +1,115 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: promtail
+  template: promtail-template
+metadata:
+  name: promtail
+  namespace: openshift
+parameters:
+  - description: Namespace to deploy promtail
+    name: PROMTAIL_PROJECT_NAME
+    value: kube-system
+objects:
+
+- apiVersion: extensions/v1beta1
+  kind: DaemonSet
+  metadata:
+    name: promtail-daemonset
+    namespace: ${PROMTAIL_PROJECT_NAME}
+    labels:
+      app: promtail
+      template: promtail-template
+  spec:
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        name: promtail
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          name: promtail
+      spec:
+        containers:
+        - args: ["-config.file=/etc/promtail/promtail-config.yaml"]
+          env:
+          - name: HOSTNAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: spec.nodeName
+          # image: grafana/promtail:1.5.0
+          image: grafana/promtail:1.6.1
+          imagePullPolicy: IfNotPresent
+          name: promtail-container
+          ports:
+          - containerPort: 3101
+            hostPort: 3101
+            protocol: TCP
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /etc/promtail
+            name: promtail-config
+          - mountPath: /tmp
+            name: promtail-data
+          - mountPath: /var/lib/docker/containers
+            name: docker
+            readOnly: true
+          - mountPath: /var/log
+            name: pods
+            readOnly: true
+        dnsPolicy: ClusterFirst
+        hostPID: true
+        nodeSelector:
+          loki: "true"
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        serviceAccount: promtail-sa
+        serviceAccountName: promtail-sa
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - emptyDir: {}
+          name: promtail-data
+        - configMap:
+            defaultMode: 420
+            name: promtail-config
+          name: promtail-config
+        - hostPath:
+            path: /var/lib/docker/containers
+          name: docker
+        - hostPath:
+            path: /var/log
+          name: pods
+    updateStrategy:
+      rollingUpdate:
+        maxUnavailable: 1
+      type: RollingUpdate
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: promtail
+    namespace: ${PROMTAIL_PROJECT_NAME}
+    labels:
+      app: promtail
+      template: promtail-template
+  spec:
+    type: ClusterIP
+    ports:
+      - name: 3101-tcp
+        port: 3101
+        protocol: TCP
+        targetPort: 3101
+    selector:
+      name: promtail
+    sessionAffinity: None

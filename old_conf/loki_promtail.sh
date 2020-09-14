@@ -12,12 +12,12 @@ NC='\033[0m'
 
 grafana_yaml="grafana_oauth.yaml"
 loki_yaml="loki_deployment.yaml"
-promtail_yaml="promtail_daemonset.yaml"
+promtail_yaml="promtail_demonset.yaml"
 
 promtail_service_account="promtail-sa"
 loki_service_account="promtail-sa"
 
-# node_selector="openshift-demo257-node-0"
+node_selector="openshift-demo16-node-0"
 
 PROMTAIL_NAMESPACE="$1"
 LOKI_NAMESPACE="$2"
@@ -64,10 +64,15 @@ if [ "$3" == "apply" ]
         oc process -f ${grafana_yaml} -p NAMESPACE=${LOKI_NAMESPACE} | oc $3 -f -
         oc rollout status deployment/grafana -n ${LOKI_NAMESPACE}
         printf "${LIGHT_GREAN}${PROCESS} Loki on cluster${NC}\n"
-        oc process -f ${loki_yaml} -p LOKI_PROJECT_NAME=${LOKI_NAMESPACE} | oc $3 -f -
+        oc process -f ${loki_yaml} -p GRAFANA_PROJECT_NAME=${LOKI_NAMESPACE} | oc $3 -f -
         oc rollout status deployment/loki -n ${LOKI_NAMESPACE}
         printf "${LIGHT_GREAN}${PROCESS} Promtail on cluster${NC}\n"
-        oc process -f ${promtail_yaml} -p PROMTAIL_PROJECT_NAME=${PROMTAIL_NAMESPACE} -p LOKI_PROJECT_NAME=${LOKI_NAMESPACE} | oc $3 -f -
+        oc process -f ${promtail_yaml} -p PROMTAIL_PROJECT_NAME=${PROMTAIL_NAMESPACE} -p GRAFANA_PROJECT_NAME=${LOKI_NAMESPACE} -p NODE_SELECTOR=${node_selector} | oc $3 -f -
+        # sleep 10
+        # oc adm policy add-scc-to-user -z promtail-sa -n ${LOKI_NAMESPACE} hostaccess
+        # oc adm policy add-scc-to-user hostaccess promtail-sa
+        # oc adm policy add-scc-to-user hostaccess system:serviceaccount:${PROMTAIL_NAMESPACE}:promtail-sa
+        # oc create clusterrolebinding promtail-clusterrolebinding --clusterrole=view --serviceaccount=${PROMTAIL_NAMESPACE}:promtail-sa
 fi
 
 if [ "$3" == "delete" ]
@@ -76,8 +81,12 @@ if [ "$3" == "delete" ]
         printf "${LIGHT_GREAN}${PROCESS} Grafana on cluster${NC}\n"
         oc process -f ${grafana_yaml} -p NAMESPACE=${LOKI_NAMESPACE} | oc $3 -f -
         printf "${LIGHT_GREAN}${PROCESS} Loki on cluster${NC}\n"
-        oc process -f ${loki_yaml} -p LOKI_PROJECT_NAME=${LOKI_NAMESPACE} | oc $3 -f -
+        oc process -f ${loki_yaml} -p GRAFANA_PROJECT_NAME=${LOKI_NAMESPACE} | oc $3 -f -
         printf "${LIGHT_GREAN}${PROCESS} Promtail on cluster${NC}\n"
-        oc process -f ${promtail_yaml} -p PROMTAIL_PROJECT_NAME=${PROMTAIL_NAMESPACE} -p LOKI_PROJECT_NAME=${LOKI_NAMESPACE} | oc $3 -f -
-
+        oc process -f ${promtail_yaml} -p PROMTAIL_PROJECT_NAME=${PROMTAIL_NAMESPACE} -p GRAFANA_PROJECT_NAME=${LOKI_NAMESPACE} -p NODE_SELECTOR=${node_selector} | oc $3 -f -
+        # sleep 10
+        # oc adm policy remove-scc-from-user -z prometheus-node-exporter -n ${LOKI_NAMESPACE} hostaccess
+        # oc delete clusterrolebinding promtail-clusterrolebinding
+        # oc adm policy remove-scc-from-user hostaccess promtail-sa
+        # oc adm policy remove-scc-from-user hostaccess system:serviceaccount:${PROMTAIL_NAMESPACE}:promtail-sa
 fi

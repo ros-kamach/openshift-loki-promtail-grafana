@@ -1,0 +1,198 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: loki
+  template: loki-template
+metadata:
+  name: loki
+  namespace: openshift
+parameters:
+  - description: Project (Namespace)
+    displayName: Project (Namespace)
+    name: NAMESPACE
+    # value: "loki-metrics"
+  
+  - description: Storage type
+    displayName: Starage
+    name: STORAGE_ACCSESS_MODE
+    value: "ReadWriteOnce"
+  
+  - description: Storage size.
+    displayName: Storage size
+    name: STORAGE_SIZE
+    value: "10Gi"
+  
+  - description: Azure Storage Account Name.
+    displayName: Azure Storage Account Name
+    name: AZURE_SA_NAME
+    value: "XXXXXXXXXXXXXXXX"
+  
+  - description: Azure Storage Account Key.
+    displayName: Azure Storage Account Key
+    name: AZURE_SA_KEY
+    value: "XXXXXXXXXXXXXXXX"
+objects:
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: loki
+    namespace: ${NAMESPACE}
+    labels:
+      app: loki
+      group: grafana
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: loki-config
+    namespace: ${NAMESPACE}
+  data:
+    loki-config.yaml: |-
+  
+      auth_enabled: false
+
+      server:
+        http_listen_port: 3100
+
+      ingester:
+        lifecycler:
+          address: 127.0.0.1
+          ring:
+            kvstore:
+              store: inmemory
+            replication_factor: 1
+          final_sleep: 0s
+        chunk_idle_period: 5m
+        chunk_retain_period: 30s
+
+      schema_config:
+        configs:
+        - from: 2018-04-15
+          store: boltdb
+          object_store: aws
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+          chunks:
+            prefix: chunk_
+            period: 24h
+              
+      storage_config:
+        boltdb:
+          directory: /loki/index
+        aws:
+          s3: s3://${AZURE_SA_NAME}:${AZURE_SA_KEY}@minio.default.svc:9000/loki-logs
+          s3forcepathstyle: true
+
+      limits_config:
+        # enforce_metric_name: false
+        reject_old_samples: true
+        reject_old_samples_max_age: 1h
+
+      chunk_store_config:
+        max_look_back_period: 24h
+
+      table_manager:
+        # chunk_tables_provisioning:
+        #   inactive_read_throughput: 0
+        #   inactive_write_throughput: 0
+        #   provisioned_read_throughput: 0
+        #   provisioned_write_throughput: 0
+        # index_tables_provisioning:
+        #   inactive_read_throughput: 0
+        #   inactive_write_throughput: 0
+        #   provisioned_read_throughput: 0
+        #   provisioned_write_throughput: 0
+        retention_deletes_enabled: true
+        retention_period: 24h
+
+- apiVersion: "v1"
+  kind: "PersistentVolumeClaim"
+  metadata:
+    name: loki-storage
+    namespace: ${NAMESPACE}
+  spec:
+    accessModes:
+      - ${STORAGE_ACCSESS_MODE}
+    resources:
+      requests:
+        storage: ${STORAGE_SIZE}        
+
+- apiVersion: apps/v1beta2
+  kind: Deployment
+  metadata:
+    name: loki
+    namespace: ${NAMESPACE}
+    labels:
+      app: loki
+      group: grafana
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: loki
+        group: grafana
+    template:
+      metadata:
+        labels:
+          app: loki
+          group: grafana
+      spec:
+        containers:
+          - name: loki
+            # image: grafana/loki:master
+            image: grafana/loki:1.6.1
+            imagePullPolicy: IfNotPresent
+            args: ['-config.file=/etc/loki/loki-config.yaml']
+            resources:
+              limits:
+                cpu: 500m
+                memory: 500Mi
+              requests:
+                cpu: 250m
+                memory: 300Mi
+            ports:
+              - containerPort: 3100
+                protocol: TCP
+            volumeMounts:
+            - name: loki-config
+              mountPath: /etc/loki/
+            - name: loki-data
+              mountPath: /loki
+        volumes:
+          - name: loki-config
+            configMap:
+              name: loki-config
+          - name: loki-data
+            persistentVolumeClaim:
+              claimName: loki-storage
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        serviceAccountName: loki
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        
+
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: loki
+    namespace: ${NAMESPACE}
+    labels:
+      app: loki
+      group: grafana
+  spec:
+    type: ClusterIP
+    ports:
+      - name: 3100-tcp
+        port: 3100
+        protocol: TCP
+        targetPort: 3100
+    selector:
+      app: loki
+      group: grafana
+    sessionAffinity: None

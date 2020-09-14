@@ -8,30 +8,6 @@ metadata:
       Grafana server with patched Prometheus datasource.
     iconClass: fa fa-cogs
     tags: "metrics,monitoring,grafana,prometheus"
-parameters:
-  - description: The location of the grafana image
-    name: IMAGE_GRAFANA
-    value: grafana/grafana:master
-  - description: The location of the proxy image
-    name: IMAGE_PROXY
-    value: openshift/oauth-proxy:v1.1.0
-  - description: External URL for the grafana route
-    name: ROUTE_URL
-    value: ""
-  - description: The namespace to instantiate heapster under. Defaults to 'grafana'.
-    name: NAMESPACE
-  - description: The session secret for the proxy
-    name: SESSION_SECRET
-    generate: expression
-    from: "[a-zA-Z0-9]{43}"
-  - description: Storage type.
-    displayName: Starage type
-    name: STORAGE_ACCSESS_MODE
-    value: "ReadWriteOnce"
-  - description: Storage size.
-    displayName: Jenkins Starage
-    name: STORAGE_SIZE
-    value: "10Gi"
 objects:
 
 - apiVersion: v1
@@ -160,6 +136,9 @@ objects:
           - name: grafana-http
             containerPort: 3000
           volumeMounts:
+          - name: loki-datasource
+            # mountPath: /urs/share/grafana/public/datasources
+            mountPath: /etc/grafana/provisioning/datasources
           - mountPath: "/root/go/src/github.com/grafana/grafana/data"
             name: grafana-data
           - mountPath: "/usr/share/grafana/conf"
@@ -170,6 +149,9 @@ objects:
             name: secrets
 
         volumes:
+        - name: loki-datasource
+          configMap:
+            name: grafana-datasource
         - name: grafanaconfig
           configMap:
             name: grafana-config
@@ -576,3 +558,48 @@ objects:
       [external_image_storage.gcs]
       key_file =
       bucket =
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: grafana-datasource
+    namespace: "${NAMESPACE}"
+    labels:
+      app: grafana
+      group: grafana
+  data:
+    loki.yaml: |-
+        apiVersion: 1
+    
+        datasources:
+          - name: Loki
+            type: loki
+            access: proxy
+            url: loki.${NAMESPACE}.svc:3100
+            editable: true      
+
+parameters:
+  - description: The location of the grafana image
+    name: IMAGE_GRAFANA
+    value: grafana/grafana:master
+  - description: The location of the proxy image
+    name: IMAGE_PROXY
+    value: openshift/oauth-proxy:v1.1.0
+  - description: External URL for the grafana route
+    name: ROUTE_URL
+    value: ""
+  - description: The namespace to instantiate heapster under. Defaults to 'grafana'.
+    name: NAMESPACE
+    # value: openshift-metrics
+  - description: The session secret for the proxy
+    name: SESSION_SECRET
+    generate: expression
+    from: "[a-zA-Z0-9]{43}"
+  - description: Storage type.
+    displayName: Starage type
+    name: STORAGE_ACCSESS_MODE
+    value: "ReadWriteOnce"
+  - description: Storage size.
+    displayName: Jenkins Starage
+    name: STORAGE_SIZE
+    value: "10Gi"

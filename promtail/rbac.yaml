@@ -1,0 +1,82 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: promtail
+  template: promtail-template
+metadata:
+  name: promtail-rbac
+  namespace: openshift
+parameters:
+  - description: Namespace to deploy promtail
+    name: PROMTAIL_PROJECT_NAME
+    value: kube-system
+objects:
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: promtail-sa
+    namespace: ${PROMTAIL_PROJECT_NAME}
+    labels:
+      app: promtail
+      template: promtail-template
+
+- apiVersion: authorization.openshift.io/v1
+  groupNames: null
+  kind: ClusterRoleBinding
+  metadata:
+    labels:
+      app: promtail
+      template: promtail-template
+    name: promtail-clusterrolebinding
+  roleRef:
+    name: cluster-reader
+  subjects:
+  - kind: ServiceAccount
+    name: promtail-sa
+    namespace: ${PROMTAIL_PROJECT_NAME}
+  userNames:
+  - system:serviceaccount:${PROMTAIL_PROJECT_NAME}:promtail-sa
+
+- apiVersion: security.openshift.io/v1
+  kind: SecurityContextConstraints
+  metadata:
+    name: nodeaccess-anyuid
+    labels:
+      app: promtail
+      template: promtail-template
+  priority: null
+  readOnlyRootFilesystem: false
+  volumes:
+    - configMap
+    - downwardAPI
+    - emptyDir
+    - hostPath
+    - persistentVolumeClaim
+    - projected
+    - secret
+  requiredDropCapabilities:
+  - KILL
+  - MKNOD
+  - SETUID
+  - SETGID
+  runAsUser:
+    type: RunAsAny
+  seLinuxContext:
+    type: RunAsAny
+  supplementalGroups:
+    type: RunAsAny
+  fsGroup:
+    type: MustRunAs
+  groups: []
+  users:
+    - system:serviceaccount:${PROMTAIL_PROJECT_NAME}:promtail-sa
+  allowHostDirVolumePlugin: true
+  allowHostIPC: true
+  allowHostNetwork: true
+  allowHostPID: true
+  allowHostPorts: true
+  allowPrivilegedContainer: false
+  allowedCapabilities: []
+  allowedFlexVolumes: []
+  defaultAddCapabilities: []

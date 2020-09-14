@@ -1,0 +1,89 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: loki
+  template: log-gen-template
+metadata:
+  name: log-gen
+  namespace: openshift
+parameters:
+  - description: Namespace 1
+    displayName: Namespace 1
+    name: NAMESPACE1
+    value: test1
+  - description: Namespace 1
+    displayName: Namespace 1
+    name: NAMESPACE2
+    value: test2
+  - description: Node name 1
+    displayName: Node name 1
+    name: NODE1
+    value: openshift-loki-demo4-node-0
+  - description: Node name 2
+    displayName: Node name 2
+    name: NODE2
+    value: openshift-loki-demo4-node-1
+
+objects:
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: node-0-docker-log-generator
+    labels:
+      app: node-0-docker-log-generator
+    namespace: ${NAMESPACE1}
+  spec:
+    selector:
+      matchLabels:
+        app: node-0-docker-log-generator
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          app: node-0-docker-log-generator
+      spec:
+        containers:
+        - name: node-0-docker-log-generator
+          imagePullPolicy: Always
+          image: chentex/random-logger:latest
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi
+        nodeSelector:
+          kubernetes.io/hostname: ${NODE1}
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: node-1-docker-log-generator
+    labels:
+      app: node-1-docker-log-generator
+    namespace: ${NAMESPACE2}
+  spec:
+    selector:
+      matchLabels:
+        app: node-1-docker-log-generator
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          app: node-1-docker-log-generator
+      spec:
+        containers:
+        - name: node-1-docker-log-generator
+          imagePullPolicy: Always
+          image: chentex/random-logger:latest
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi
+        nodeSelector:
+          kubernetes.io/hostname: ${NODE2}

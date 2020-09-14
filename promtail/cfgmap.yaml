@@ -1,0 +1,123 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: promtail
+  template: promtail-template
+metadata:
+  name: promtail-cfgmap
+  namespace: openshift
+parameters:
+  - description: Namespace to deploy promtail
+    name: PROMTAIL_PROJECT_NAME
+    value: kube-system
+  
+  - description: Loki namespace
+    name: LOKI_PROJECT_NAME
+    value: loki-metrics
+
+  - description: Cluster Name
+    name: TENENT_ID
+    value: loki-north
+objects:
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: promtail-config
+    namespace: ${PROMTAIL_PROJECT_NAME}
+    labels:
+      app: promtail
+      template: promtail-template
+  data:
+    promtail-config.yaml: |-
+      client:
+        url: http://loki.${LOKI_PROJECT_NAME}.svc:3100/api/prom/push
+        external_labels: {}
+        timeout: 30s
+        tenant_id: ${TENENT_ID}
+        
+      positions:
+        filename: /tmp/positions.yaml
+        
+      server:
+        http_listen_port: 3101
+        # log_level: debug
+  
+      target_config:
+        sync_period: 10s
+        
+      scrape_configs:
+        
+      - job_name: kubernetes-pods-app
+        pipeline_stages:
+          - docker: {}
+        kubernetes_sd_configs:
+        - role: pod
+        relabel_configs:
+        - action: drop
+          regex: .+
+          source_labels:
+          - __meta_kubernetes_pod_label_name
+        - source_labels:
+          - __meta_kubernetes_pod_label_app
+          target_label: __service__
+        - source_labels:
+          - __meta_kubernetes_pod_node_name
+          target_label: __host__
+        - action: drop
+          regex: ^$
+          source_labels:
+          - __service__
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - action: replace
+          replacement: $1
+          separator: /
+          source_labels:
+          - __meta_kubernetes_namespace
+          - __service__
+          target_label: job
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_namespace
+          target_label: namespace
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_pod_name
+          target_label: instance
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_pod_container_name
+          target_label: container_name
+        - replacement: /var/log/pods/$1*.log
+          separator: /
+          source_labels:
+          - __meta_kubernetes_pod_uid
+          - __meta_kubernetes_pod_container_name
+          target_label: __path__
+      - job_name: syslog
+        pipeline_stages:
+        static_configs:
+        - labels:
+            __path__: /var/log/messages  
+        kubernetes_sd_configs:
+        - role: node
+        relabel_configs:
+        - source_labels:
+          - __meta_kubernetes_node_name
+          target_label: __host__
+        - action: labelmap
+          regex: __meta_kubernetes_node_label_(.+)
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_node_name
+          target_label: node_name
+        - action: replace
+          source_labels:
+          - __meta_kubernetes_node_name
+          target_label: node_name
+        - replacement: /var/log/messages
+          separator: /
+          source_labels:
+          - __meta_kubernetes_node_name
+          target_label: __path__
