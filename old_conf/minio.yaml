@@ -16,8 +16,8 @@ objects:
     name: azure-storage-account-access
     namespace: ${NAMESPACE}
   stringData:
-    azure_storage-account-name: lokiblob
-    azure_storage-account-key: YdNHuwqKq63IMMpYaYhPrwT3QQq0PL+xYb9iVIzpU0vmUNr35xrQx6JNtFPF6w3IudiETA7QOvIs61HVStwSWg==
+    azure_storage-account-name: XXXXXXXXXXXXX
+    azure_storage-account-key: XXXXXXXXXXXXX
 
 - apiVersion: v1
   kind: Service
